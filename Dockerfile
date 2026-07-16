@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jdk-alpine AS build
+FROM eclipse-temurin:25-jdk-alpine AS build
 
 WORKDIR /workspace
 
@@ -9,7 +9,7 @@ RUN chmod +x mvnw && ./mvnw --batch-mode --no-transfer-progress dependency:go-of
 COPY src/ src/
 RUN ./mvnw --batch-mode --no-transfer-progress -Dmaven.test.skip=true package
 
-FROM eclipse-temurin:21-jre-alpine AS runtime
+FROM eclipse-temurin:25-jre-alpine AS runtime
 
 RUN addgroup -S app && adduser -S -G app -u 10001 app
 
