@@ -108,8 +108,11 @@ management:
 logging:
   include-application-name: false
 
+  level:
+    com.osmarin.financial.transaction.authorization: ${APPLICATION_LOG_LEVEL:INFO}
+
   pattern:
-    correlation: "[${spring.application.name:},%X{traceId:-},%X{spanId:-}] "
+    correlation: "%replace([${spring.application.name:},%X{traceId:-},%X{spanId:-}]){',+(?=\\])',''} "
 
 application:
   messaging:

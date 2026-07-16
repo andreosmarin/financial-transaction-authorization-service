@@ -34,10 +34,10 @@ public class CreateAccountService implements CreateAccountUseCase {
         boolean created = accountRepository.createIfAbsent(account);
 
         if (created) {
-            log.info("Account created: accountId={}", account.getId());
+            log.info("event=account_created accountId={} outcome=CREATED", account.getId());
             return;
         }
 
-        log.debug("Duplicate account-created event ignored: accountId={}", account.getId());
+        log.debug("event=account_created accountId={} outcome=DUPLICATE_IGNORED", account.getId());
     }
 }

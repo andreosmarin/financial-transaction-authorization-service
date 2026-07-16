@@ -8,6 +8,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Currency;
+import java.util.Locale;
 import java.util.UUID;
 
 public class Account {
@@ -109,12 +111,18 @@ public class Account {
     private static String requireValidCurrency(String currency) {
         Objects.requireNonNull(currency, "currency must not be null");
 
-        var normalizedCurrency = currency.toUpperCase();
+        var normalizedCurrency = currency.strip().toUpperCase(Locale.ROOT);
 
         if (normalizedCurrency.length() != 3) {
             throw new IllegalArgumentException(
                     "Only ISO4217 currency is supported"
             );
+        }
+
+        try {
+            Currency.getInstance(normalizedCurrency);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Only ISO4217 currency is supported", exception);
         }
 
         return normalizedCurrency;

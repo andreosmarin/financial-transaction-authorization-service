@@ -44,8 +44,19 @@ public class AccountRepositoryAdapter implements AccountRepositoryPort {
     }
 
     @Override
+    public Optional<Account> findByIdForUpdate(UUID id) {
+        return jpaRepository.findByIdForUpdate(id)
+                .map(mapper::toDomain);
+    }
+
+    @Override
     public Account save(Account account) {
-        var saved = jpaRepository.save(mapper.toEntity(account));
-        return mapper.toDomain(saved);
+        AccountEntity entity = jpaRepository.findById(account.getId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Account disappeared while being updated: " + account.getId()
+                ));
+        entity.setBalance(account.getBalance());
+        entity.setStatus(account.getStatus());
+        return account;
     }
 }

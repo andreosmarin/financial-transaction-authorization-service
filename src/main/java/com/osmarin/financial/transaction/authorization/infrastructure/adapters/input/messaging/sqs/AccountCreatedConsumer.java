@@ -28,10 +28,10 @@ public class AccountCreatedConsumer {
     public void consume(AccountCreatedMessage message) {
         CreateAccountCommand command = mapper.toCommand(message);
 
-        log.info("Processing account-created event: accountId={}", command.id());
+        log.debug("event=account_created_message_received accountId={}", command.id());
 
         createAccountUseCase.execute(command);
 
-        log.info("Account-created event processed: accountId={}", command.id());
+        log.debug("event=account_created_message_processed accountId={}", command.id());
     }
 }

@@ -10,6 +10,8 @@ public interface AccountRepositoryPort {
 
     Optional<Account> findById(UUID id);
 
+    Optional<Account> findByIdForUpdate(UUID id);
+
     Account save(Account account);
 
 }
