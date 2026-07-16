@@ -1,6 +1,7 @@
 package com.osmarin.financial.transaction.authorization.infrastructure.adapters.input.rest.dto;
 
 import com.osmarin.financial.transaction.authorization.domain.enums.TransactionType;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
@@ -14,6 +15,7 @@ public record AuthorizeTransactionRequest(
 ) {
     public record Amount(
             @NotNull @DecimalMin(value = "0.01") @Digits(integer = 17, fraction = 2) BigDecimal value,
+            @Schema(example = "BRL")
             @NotBlank @Pattern(regexp = "[A-Za-z]{3}") String currency
     ) {
     }
