@@ -5,6 +5,7 @@ import com.osmarin.financial.transaction.authorization.application.results.Trans
 import com.osmarin.financial.transaction.authorization.domain.enums.AccountStatus;
 import com.osmarin.financial.transaction.authorization.domain.enums.TransactionStatus;
 import com.osmarin.financial.transaction.authorization.domain.enums.TransactionType;
+import com.osmarin.financial.transaction.authorization.domain.exceptions.AccountNotEnabledException;
 import com.osmarin.financial.transaction.authorization.domain.models.Account;
 import com.osmarin.financial.transaction.authorization.domain.models.FinancialTransaction;
 import com.osmarin.financial.transaction.authorization.domain.models.Money;
@@ -72,5 +73,19 @@ class TransactionAuthorizationControllerTest {
                                 {"accountId":"%s","type":"DEBIT","amount":{"value":0,"currency":"BR"}}
                                 """.formatted(ACCOUNT_ID)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldTranslatePropagatedDomainError() throws Exception {
+        when(useCase.execute(any())).thenThrow(new AccountNotEnabledException(ACCOUNT_ID));
+
+        mockMvc.perform(post("/api/transaction-authorization/authorize")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"accountId":"%s","type":"DEBIT","amount":{"value":1.00,"currency":"BRL"}}
+                                """.formatted(ACCOUNT_ID)))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.title").value("Transaction cannot be authorized"))
+                .andExpect(jsonPath("$.detail").value("Account is not enabled: " + ACCOUNT_ID));
     }
 }

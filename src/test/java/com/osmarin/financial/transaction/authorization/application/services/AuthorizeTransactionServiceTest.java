@@ -9,6 +9,7 @@ import com.osmarin.financial.transaction.authorization.domain.enums.AccountStatu
 import com.osmarin.financial.transaction.authorization.domain.enums.TransactionStatus;
 import com.osmarin.financial.transaction.authorization.domain.enums.TransactionType;
 import com.osmarin.financial.transaction.authorization.domain.exceptions.AccountNotFoundException;
+import com.osmarin.financial.transaction.authorization.domain.exceptions.AccountNotEnabledException;
 import com.osmarin.financial.transaction.authorization.domain.exceptions.CurrencyMismatchException;
 import com.osmarin.financial.transaction.authorization.domain.models.Account;
 import com.osmarin.financial.transaction.authorization.domain.models.FinancialTransaction;
@@ -113,6 +114,24 @@ class AuthorizeTransactionServiceTest {
         assertThatThrownBy(() -> service.execute(command(TransactionType.CREDIT, "1.00", "USD")))
                 .isInstanceOf(CurrencyMismatchException.class)
                 .hasMessage("Transaction currency USD does not match account currency BRL");
+        verify(transactionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldPropagateDomainErrorForDisabledAccount() {
+        Account account = Account.restore(
+                ACCOUNT_ID,
+                UUID.fromString("31fb61f8-dde5-456a-9062-5b92af091bd7"),
+                Money.of(new BigDecimal("10.00"), "BRL"), AccountStatus.DISABLED,
+                Instant.parse("2025-01-01T00:00:00Z")
+        );
+        when(accountRepository.findByIdForUpdate(ACCOUNT_ID)).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> service.execute(command(TransactionType.DEBIT, "1.00", "BRL")))
+                .isInstanceOf(AccountNotEnabledException.class)
+                .hasMessage("Account is not enabled: " + ACCOUNT_ID);
+
+        verify(accountRepository, never()).save(org.mockito.ArgumentMatchers.any());
         verify(transactionRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 

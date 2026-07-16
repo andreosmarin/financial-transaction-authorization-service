@@ -10,6 +10,7 @@ import com.osmarin.financial.transaction.authorization.application.results.Trans
 import com.osmarin.financial.transaction.authorization.domain.enums.TransactionStatus;
 import com.osmarin.financial.transaction.authorization.domain.enums.TransactionType;
 import com.osmarin.financial.transaction.authorization.domain.exceptions.AccountNotFoundException;
+import com.osmarin.financial.transaction.authorization.domain.exceptions.InsufficientFundsException;
 import com.osmarin.financial.transaction.authorization.domain.models.Account;
 import com.osmarin.financial.transaction.authorization.domain.models.FinancialTransaction;
 import jakarta.transaction.Transactional;
@@ -76,13 +77,20 @@ public class AuthorizeTransactionService implements AuthorizeTransactionUseCase 
 
     private TransactionStatus authorize(Account account, AuthorizeTransactionCommand command) {
         Objects.requireNonNull(command.type(), "type must not be null");
-        if (command.type() == TransactionType.CREDIT) {
-            account.credit(command.amount());
+        try {
+            if (command.type() == TransactionType.CREDIT) {
+                account.credit(command.amount());
+            } else {
+                account.debit(command.amount());
+            }
             return TransactionStatus.SUCCEEDED;
+        } catch (InsufficientFundsException exception) {
+            log.debug(
+                    "event=transaction_authorization_declined accountId={} type={} reason=INSUFFICIENT_FUNDS",
+                    account.getId(), command.type()
+            );
+            return TransactionStatus.FAILED;
         }
-        return account.debit(command.amount())
-                ? TransactionStatus.SUCCEEDED
-                : TransactionStatus.FAILED;
     }
 
     private void logAuthorizationResult(FinancialTransaction transaction) {

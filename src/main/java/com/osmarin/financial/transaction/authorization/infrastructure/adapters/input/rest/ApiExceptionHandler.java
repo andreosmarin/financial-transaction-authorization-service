@@ -1,8 +1,12 @@
 package com.osmarin.financial.transaction.authorization.infrastructure.adapters.input.rest;
 
 import com.osmarin.financial.transaction.authorization.domain.exceptions.AccountNotFoundException;
+import com.osmarin.financial.transaction.authorization.domain.exceptions.AccountNotEnabledException;
 import com.osmarin.financial.transaction.authorization.domain.exceptions.CurrencyMismatchException;
+import com.osmarin.financial.transaction.authorization.domain.exceptions.DomainException;
 import com.osmarin.financial.transaction.authorization.domain.exceptions.InvalidAmountException;
+import com.osmarin.financial.transaction.authorization.domain.exceptions.InvalidBalanceException;
+import com.osmarin.financial.transaction.authorization.domain.exceptions.InvalidCurrencyException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,16 +27,27 @@ public class ApiExceptionHandler {
         return problem(HttpStatus.NOT_FOUND, "Account not found", exception.getMessage());
     }
 
-    @ExceptionHandler({CurrencyMismatchException.class, InvalidAmountException.class, IllegalArgumentException.class})
+    @ExceptionHandler({
+            CurrencyMismatchException.class,
+            InvalidAmountException.class,
+            InvalidBalanceException.class,
+            InvalidCurrencyException.class
+    })
     ProblemDetail handleInvalidRequest(RuntimeException exception, HttpServletRequest request) {
         logRejectedRequest(request, HttpStatus.BAD_REQUEST, exception);
         return problem(HttpStatus.BAD_REQUEST, "Invalid transaction", exception.getMessage());
     }
 
-    @ExceptionHandler(IllegalStateException.class)
-    ProblemDetail handleInvalidAccountState(IllegalStateException exception, HttpServletRequest request) {
+    @ExceptionHandler(AccountNotEnabledException.class)
+    ProblemDetail handleInvalidAccountState(AccountNotEnabledException exception, HttpServletRequest request) {
         logRejectedRequest(request, HttpStatus.UNPROCESSABLE_CONTENT, exception);
         return problem(HttpStatus.UNPROCESSABLE_CONTENT, "Transaction cannot be authorized", exception.getMessage());
+    }
+
+    @ExceptionHandler(DomainException.class)
+    ProblemDetail handleDomainFailure(DomainException exception, HttpServletRequest request) {
+        logRejectedRequest(request, HttpStatus.UNPROCESSABLE_CONTENT, exception);
+        return problem(HttpStatus.UNPROCESSABLE_CONTENT, "Business rule violation", exception.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

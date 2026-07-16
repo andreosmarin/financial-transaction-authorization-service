@@ -1,7 +1,10 @@
 package com.osmarin.financial.transaction.authorization.domain.models;
 
 import com.osmarin.financial.transaction.authorization.domain.enums.AccountStatus;
+import com.osmarin.financial.transaction.authorization.domain.exceptions.AccountNotEnabledException;
+import com.osmarin.financial.transaction.authorization.domain.exceptions.InsufficientFundsException;
 import com.osmarin.financial.transaction.authorization.domain.exceptions.InvalidAmountException;
+import com.osmarin.financial.transaction.authorization.domain.exceptions.InvalidBalanceException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -33,9 +36,8 @@ class AccountTest {
         Account account = enabledAccountWithBalance("100.00");
 
         account.credit(money("25.50"));
-        boolean debited = account.debit(money("40.25"));
+        account.debit(money("40.25"));
 
-        assertThat(debited).isTrue();
         assertThat(account.getBalance()).isEqualTo(money("85.25"));
     }
 
@@ -43,9 +45,10 @@ class AccountTest {
     void shouldRefuseDebitWhenBalanceIsInsufficientWithoutChangingIt() {
         Account account = enabledAccountWithBalance("10.00");
 
-        boolean debited = account.debit(money("10.01"));
+        assertThatThrownBy(() -> account.debit(money("10.01")))
+                .isInstanceOf(InsufficientFundsException.class)
+                .hasMessage("Insufficient funds: requested 10.01 BRL, available 10.00 BRL");
 
-        assertThat(debited).isFalse();
         assertThat(account.getBalance()).isEqualTo(money("10.00"));
     }
 
@@ -53,9 +56,8 @@ class AccountTest {
     void shouldAllowDebitForExactBalance() {
         Account account = enabledAccountWithBalance("10.00");
 
-        boolean debited = account.debit(money("10.00"));
+        account.debit(money("10.00"));
 
-        assertThat(debited).isTrue();
         assertThat(account.getBalance()).isEqualTo(Money.zero("BRL"));
     }
 
@@ -67,8 +69,8 @@ class AccountTest {
         );
 
         assertThatThrownBy(() -> account.credit(money("1.00")))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("Account is not enabled");
+                .isInstanceOf(AccountNotEnabledException.class)
+                .hasMessage("Account is not enabled: " + ACCOUNT_ID);
         assertThat(account.getBalance()).isEqualTo(money("10.00"));
     }
 
@@ -97,7 +99,7 @@ class AccountTest {
     @Test
     void shouldRejectInvalidInitialBalance() {
         assertThatThrownBy(() -> enabledAccountWithBalance("-0.01"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidBalanceException.class)
                 .hasMessage("Balance must not be negative");
         assertThatThrownBy(() -> Money.of(new BigDecimal("1.001"), "BRL"))
                 .isInstanceOf(InvalidAmountException.class)

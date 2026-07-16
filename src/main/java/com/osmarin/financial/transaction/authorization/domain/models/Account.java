@@ -1,7 +1,10 @@
 package com.osmarin.financial.transaction.authorization.domain.models;
 
 import com.osmarin.financial.transaction.authorization.domain.enums.AccountStatus;
+import com.osmarin.financial.transaction.authorization.domain.exceptions.AccountNotEnabledException;
+import com.osmarin.financial.transaction.authorization.domain.exceptions.InsufficientFundsException;
 import com.osmarin.financial.transaction.authorization.domain.exceptions.InvalidAmountException;
+import com.osmarin.financial.transaction.authorization.domain.exceptions.InvalidBalanceException;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -69,10 +72,12 @@ public class Account {
     }
 
     private static Money requireValidBalance(Money balance) {
-        Objects.requireNonNull(balance, "balance must not be null");
+        if (balance == null) {
+            throw new InvalidBalanceException("Balance must not be null");
+        }
 
         if (balance.isNegative()) {
-            throw new IllegalArgumentException("Balance must not be negative");
+            throw new InvalidBalanceException("Balance must not be negative");
         }
         return balance;
     }
@@ -84,17 +89,15 @@ public class Account {
         balance = balance.add(amount);
     }
 
-    public boolean debit(Money amount) {
+    public void debit(Money amount) {
         requireEnabled();
         requireValidAmount(amount);
 
         if (balance.compareTo(amount) < 0) {
-            return false;
+            throw new InsufficientFundsException(amount, balance);
         }
 
         balance = balance.subtract(amount);
-
-        return true;
     }
 
     public boolean isEnabled() {
@@ -103,7 +106,7 @@ public class Account {
 
     private void requireEnabled() {
         if (!isEnabled()) {
-            throw new IllegalStateException("Account is not enabled");
+            throw new AccountNotEnabledException(id);
         }
     }
 

@@ -3,6 +3,7 @@ package com.osmarin.financial.transaction.authorization.infrastructure.adapters.
 import com.osmarin.financial.transaction.authorization.domain.enums.AccountStatus;
 import com.osmarin.financial.transaction.authorization.domain.enums.TransactionStatus;
 import com.osmarin.financial.transaction.authorization.domain.enums.TransactionType;
+import com.osmarin.financial.transaction.authorization.domain.exceptions.InsufficientFundsException;
 import com.osmarin.financial.transaction.authorization.domain.models.Account;
 import com.osmarin.financial.transaction.authorization.domain.models.FinancialTransaction;
 import com.osmarin.financial.transaction.authorization.domain.models.Money;
@@ -164,11 +165,13 @@ class AccountRepositoryAdapterIntegrationTest {
                 start.await(5, TimeUnit.SECONDS);
                 return transactionTemplate.execute(status -> {
                     Account account = repository.findByIdForUpdate(accountId).orElseThrow();
-                    boolean authorized = account.debit(Money.of(new BigDecimal("80.00"), "BRL"));
-                    if (authorized) {
+                    try {
+                        account.debit(Money.of(new BigDecimal("80.00"), "BRL"));
                         repository.save(account);
+                        return true;
+                    } catch (InsufficientFundsException exception) {
+                        return false;
                     }
-                    return authorized;
                 });
             };
 

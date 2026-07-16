@@ -2,6 +2,7 @@ package com.osmarin.financial.transaction.authorization.domain.models;
 
 import com.osmarin.financial.transaction.authorization.domain.exceptions.CurrencyMismatchException;
 import com.osmarin.financial.transaction.authorization.domain.exceptions.InvalidAmountException;
+import com.osmarin.financial.transaction.authorization.domain.exceptions.InvalidCurrencyException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -58,7 +59,7 @@ class MoneyTest {
     @Test
     void shouldRejectUnknownIsoCurrency() {
         assertThatThrownBy(() -> Money.of(BigDecimal.ONE, "XYZ"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidCurrencyException.class)
                 .hasMessage("Only ISO4217 currency is supported");
     }
 }

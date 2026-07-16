@@ -2,6 +2,7 @@ package com.osmarin.financial.transaction.authorization.domain.models;
 
 import com.osmarin.financial.transaction.authorization.domain.exceptions.CurrencyMismatchException;
 import com.osmarin.financial.transaction.authorization.domain.exceptions.InvalidAmountException;
+import com.osmarin.financial.transaction.authorization.domain.exceptions.InvalidCurrencyException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -55,7 +56,9 @@ public final class Money {
     }
 
     private void requireSameCurrency(Money other) {
-        Objects.requireNonNull(other, "money must not be null");
+        if (other == null) {
+            throw new InvalidAmountException("Amount must not be null");
+        }
         if (!currency.equals(other.currency)) {
             throw new CurrencyMismatchException(other.currency, currency);
         }
@@ -78,16 +81,18 @@ public final class Money {
     }
 
     private static String normalizeCurrency(String currency) {
-        Objects.requireNonNull(currency, "currency must not be null");
+        if (currency == null) {
+            throw new InvalidCurrencyException("Currency must not be null");
+        }
         String normalized = currency.strip().toUpperCase(Locale.ROOT);
         if (normalized.length() != 3) {
-            throw new IllegalArgumentException("Only ISO4217 currency is supported");
+            throw new InvalidCurrencyException("Only ISO4217 currency is supported");
         }
 
         try {
             Currency.getInstance(normalized);
         } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException("Only ISO4217 currency is supported", exception);
+            throw new InvalidCurrencyException("Only ISO4217 currency is supported", exception);
         }
         return normalized;
     }
