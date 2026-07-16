@@ -4,6 +4,7 @@ import com.osmarin.financial.transaction.authorization.application.commands.Auth
 import com.osmarin.financial.transaction.authorization.application.ports.input.AuthorizeTransactionUseCase;
 import com.osmarin.financial.transaction.authorization.application.ports.output.AccountRepositoryPort;
 import com.osmarin.financial.transaction.authorization.application.ports.output.TransactionIdGeneratorPort;
+import com.osmarin.financial.transaction.authorization.application.ports.output.TransactionAuthorizationMetricsPort;
 import com.osmarin.financial.transaction.authorization.application.ports.output.TransactionRepositoryPort;
 import com.osmarin.financial.transaction.authorization.application.results.TransactionAuthorizationResult;
 import com.osmarin.financial.transaction.authorization.domain.enums.TransactionStatus;
@@ -29,15 +30,18 @@ public class AuthorizeTransactionService implements AuthorizeTransactionUseCase 
     private final AccountRepositoryPort accountRepository;
     private final TransactionRepositoryPort transactionRepository;
     private final TransactionIdGeneratorPort idGenerator;
+    private final TransactionAuthorizationMetricsPort metrics;
     private final Clock clock;
 
     public AuthorizeTransactionService(AccountRepositoryPort accountRepository,
                                        TransactionRepositoryPort transactionRepository,
                                        TransactionIdGeneratorPort idGenerator,
+                                       TransactionAuthorizationMetricsPort metrics,
                                        Clock clock) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.idGenerator = idGenerator;
+        this.metrics = metrics;
         this.clock = clock;
     }
 
@@ -71,6 +75,7 @@ public class AuthorizeTransactionService implements AuthorizeTransactionUseCase 
         );
         FinancialTransaction savedTransaction = transactionRepository.save(transaction);
 
+        metrics.record(savedTransaction.getType(), savedTransaction.getStatus());
         logAuthorizationResult(savedTransaction);
 
         return new TransactionAuthorizationResult(savedTransaction, account);

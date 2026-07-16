@@ -3,6 +3,7 @@ package com.osmarin.financial.transaction.authorization.application.services;
 import com.osmarin.financial.transaction.authorization.application.commands.AuthorizeTransactionCommand;
 import com.osmarin.financial.transaction.authorization.application.ports.output.AccountRepositoryPort;
 import com.osmarin.financial.transaction.authorization.application.ports.output.TransactionIdGeneratorPort;
+import com.osmarin.financial.transaction.authorization.application.ports.output.TransactionAuthorizationMetricsPort;
 import com.osmarin.financial.transaction.authorization.application.ports.output.TransactionRepositoryPort;
 import com.osmarin.financial.transaction.authorization.domain.enums.AccountStatus;
 import com.osmarin.financial.transaction.authorization.domain.enums.TransactionStatus;
@@ -40,13 +41,14 @@ class AuthorizeTransactionServiceTest {
     @Mock AccountRepositoryPort accountRepository;
     @Mock TransactionRepositoryPort transactionRepository;
     @Mock TransactionIdGeneratorPort idGenerator;
+    @Mock TransactionAuthorizationMetricsPort metrics;
 
     private AuthorizeTransactionService service;
 
     @BeforeEach
     void setUp() {
         service = new AuthorizeTransactionService(
-                accountRepository, transactionRepository, idGenerator,
+                accountRepository, transactionRepository, idGenerator, metrics,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
@@ -64,6 +66,7 @@ class AuthorizeTransactionServiceTest {
         assertThat(result.account().getBalance()).isEqualByComparingTo("183.12");
         verify(accountRepository).save(account);
         verify(transactionRepository).save(result.transaction());
+        verify(metrics).record(TransactionType.CREDIT, TransactionStatus.SUCCEEDED);
     }
 
     @Test
@@ -89,6 +92,7 @@ class AuthorizeTransactionServiceTest {
         assertThat(result.account().getBalance()).isEqualByComparingTo("10.00");
         verify(accountRepository, never()).save(account);
         verify(transactionRepository).save(result.transaction());
+        verify(metrics).record(TransactionType.DEBIT, TransactionStatus.FAILED);
     }
 
     @Test

@@ -2,6 +2,9 @@ spring:
   application:
     name: financial-transaction-authorization-service
 
+  profiles:
+    default: local
+
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/db_financial_transactions_authorization}
     username: ${DATABASE_USERNAME:user_financial_transactions_authorization}
@@ -9,11 +12,12 @@ spring:
     driver-class-name: org.postgresql.Driver
 
     hikari:
-      maximum-pool-size: 10
-      minimum-idle: 2
-      connection-timeout: 30000
-      idle-timeout: 600000
-      max-lifetime: 1800000
+      maximum-pool-size: ${DATABASE_MAXIMUM_POOL_SIZE:10}
+      minimum-idle: ${DATABASE_MINIMUM_IDLE:2}
+      connection-timeout: ${DATABASE_CONNECTION_TIMEOUT_MS:3000}
+      validation-timeout: ${DATABASE_VALIDATION_TIMEOUT_MS:1000}
+      idle-timeout: ${DATABASE_IDLE_TIMEOUT_MS:600000}
+      max-lifetime: ${DATABASE_MAX_LIFETIME_MS:1800000}
 
   flyway:
     enabled: true
@@ -38,12 +42,6 @@ spring:
 
   cloud:
     aws:
-      endpoint: ${AWS_ENDPOINT:http://localhost:4566}
-
-      credentials:
-        access-key: ${AWS_ACCESS_KEY_ID:test}
-        secret-key: ${AWS_SECRET_ACCESS_KEY:test}
-
       region:
         static: ${AWS_REGION:sa-east-1}
 
@@ -51,9 +49,21 @@ spring:
         enabled: true
         observation-enabled: true
         listener:
-          max-inflight-messages-per-queue: 10
-          max-messages-per-poll: 10
-          poll-timeout: 10s
+          max-inflight-messages-per-queue: ${SQS_MAX_INFLIGHT_MESSAGES:10}
+          max-messages-per-poll: ${SQS_MAX_MESSAGES_PER_POLL:10}
+          poll-timeout: ${SQS_POLL_TIMEOUT:10s}
+
+  lifecycle:
+    timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT:30s}
+
+server:
+  shutdown: graceful
+  tomcat:
+    accept-count: ${SERVER_ACCEPT_COUNT:100}
+    connection-timeout: ${SERVER_CONNECTION_TIMEOUT:5s}
+    threads:
+      max: ${SERVER_MAX_THREADS:200}
+      min-spare: ${SERVER_MIN_SPARE_THREADS:10}
 
 management:
   endpoints:
@@ -69,7 +79,16 @@ management:
     health:
       probes:
         enabled: true
-      show-details: always
+      show-details: never
+      group:
+        liveness:
+          include:
+            - livenessState
+            - ping
+        readiness:
+          include:
+            - readinessState
+            - db
 
   metrics:
     tags:

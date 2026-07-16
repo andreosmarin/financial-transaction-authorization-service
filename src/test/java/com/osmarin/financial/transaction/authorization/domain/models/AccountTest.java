@@ -51,6 +51,29 @@ class AccountTest {
     }
 
     @Test
+    void shouldAllowDebitForExactBalance() {
+        Account account = enabledAccountWithBalance("10.00");
+
+        boolean debited = account.debit(new BigDecimal("10.00"), OPENED_AT);
+
+        assertThat(debited).isTrue();
+        assertThat(account.getBalance()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void shouldRejectTransactionsForDisabledAccount() {
+        Account account = Account.restore(
+                ACCOUNT_ID, OWNER_ID, new BigDecimal("10.00"), "BRL",
+                AccountStatus.DISABLED, OPENED_AT
+        );
+
+        assertThatThrownBy(() -> account.credit(new BigDecimal("1.00"), OPENED_AT))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Account is not enabled");
+        assertThat(account.getBalance()).isEqualByComparingTo("10.00");
+    }
+
+    @Test
     void shouldRejectNonPositiveOrOverPreciseAmounts() {
         Account account = enabledAccountWithBalance("10.00");
 

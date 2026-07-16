@@ -49,8 +49,15 @@ services:
     ports:
       - "127.0.0.1:4566:4566"
       - "127.0.0.1:4510-4559:4510-4559"
+    volumes:
+      - type: bind
+        source: ./localstack/init-aws.sh
+        target: /etc/localstack/init/ready.d/init-aws.sh
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:4566/_localstack/health" ]
+      test: [ "CMD-SHELL", "awslocal sqs get-queue-url --queue-name conta-bancaria-criada >/dev/null 2>&1" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -58,6 +65,7 @@ services:
 
   message-generator:
     image: golang:1.24.3
+    profiles: ["load"]
     container_name: message-generator
     depends_on:
       localstack:

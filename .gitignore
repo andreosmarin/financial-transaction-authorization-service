@@ -43,6 +43,8 @@ Thumbs.db
 
 ### Application secrets ###
 application-local.yaml
+# This repository-owned profile contains LocalStack-only test credentials.
+!src/main/resources/application-local.yaml
 
 ### Logs ###
 *.log
