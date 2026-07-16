@@ -7,6 +7,7 @@ import com.osmarin.financial.transaction.authorization.domain.enums.TransactionS
 import com.osmarin.financial.transaction.authorization.domain.enums.TransactionType;
 import com.osmarin.financial.transaction.authorization.domain.models.Account;
 import com.osmarin.financial.transaction.authorization.domain.models.FinancialTransaction;
+import com.osmarin.financial.transaction.authorization.domain.models.Money;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -36,12 +37,12 @@ class TransactionAuthorizationControllerTest {
     @Test
     void shouldExposeAuthorizationContract() throws Exception {
         Account account = Account.restore(
-                ACCOUNT_ID, UUID.randomUUID(), new BigDecimal("183.12"), "BRL",
+                ACCOUNT_ID, UUID.randomUUID(), Money.of(new BigDecimal("183.12"), "BRL"),
                 AccountStatus.ENABLED, Instant.parse("2025-01-01T00:00:00Z")
         );
         FinancialTransaction transaction = FinancialTransaction.completed(
                 UUID.fromString("8e8ae808-b154-48b5-9f3e-553935cc4543"), ACCOUNT_ID,
-                TransactionType.CREDIT, new BigDecimal("97.07"), "BRL",
+                TransactionType.CREDIT, Money.of(new BigDecimal("97.07"), "BRL"),
                 TransactionStatus.SUCCEEDED, Instant.parse("2025-07-08T18:57:55Z")
         );
         when(useCase.execute(any())).thenReturn(new TransactionAuthorizationResult(transaction, account));

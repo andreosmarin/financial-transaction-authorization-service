@@ -2,6 +2,7 @@ package com.osmarin.financial.transaction.authorization.infrastructure.adapters.
 
 import com.osmarin.financial.transaction.authorization.application.commands.AuthorizeTransactionCommand;
 import com.osmarin.financial.transaction.authorization.application.results.TransactionAuthorizationResult;
+import com.osmarin.financial.transaction.authorization.domain.models.Money;
 import com.osmarin.financial.transaction.authorization.infrastructure.adapters.input.rest.dto.AuthorizeTransactionRequest;
 import com.osmarin.financial.transaction.authorization.infrastructure.adapters.input.rest.dto.TransactionAuthorizationResponse;
 import org.springframework.stereotype.Component;
@@ -10,7 +11,8 @@ import org.springframework.stereotype.Component;
 public class TransactionAuthorizationRestMapper {
     public AuthorizeTransactionCommand toCommand(AuthorizeTransactionRequest request) {
         return new AuthorizeTransactionCommand(
-                request.accountId(), request.type(), request.amount().value(), request.amount().currency()
+                request.accountId(), request.type(),
+                Money.of(request.amount().value(), request.amount().currency())
         );
     }
 
@@ -22,7 +24,7 @@ public class TransactionAuthorizationRestMapper {
                         transaction.getId(),
                         transaction.getType(),
                         new TransactionAuthorizationResponse.TransactionAmount(
-                                transaction.getAmount(), transaction.getCurrency()
+                                transaction.getAmount().amount(), transaction.getAmount().currency()
                         ),
                         transaction.getStatus(),
                         transaction.getTimestamp()
@@ -30,7 +32,7 @@ public class TransactionAuthorizationRestMapper {
                 new TransactionAuthorizationResponse.Account(
                         account.getId(),
                         new TransactionAuthorizationResponse.Balance(
-                                account.getBalance(), account.getCurrency()
+                                account.getBalance().amount(), account.getBalance().currency()
                         )
                 )
         );

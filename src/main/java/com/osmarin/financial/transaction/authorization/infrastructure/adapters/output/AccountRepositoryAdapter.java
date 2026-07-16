@@ -55,7 +55,7 @@ public class AccountRepositoryAdapter implements AccountRepositoryPort {
                 .orElseThrow(() -> new IllegalStateException(
                         "Account disappeared while being updated: " + account.getId()
                 ));
-        entity.setBalance(account.getBalance());
+        entity.setBalance(account.getBalance().amount());
         entity.setStatus(account.getStatus());
         return account;
     }

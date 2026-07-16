@@ -3,6 +3,7 @@ package com.osmarin.financial.transaction.authorization.application.services;
 import com.osmarin.financial.transaction.authorization.application.commands.AuthorizeTransactionCommand;
 import com.osmarin.financial.transaction.authorization.application.ports.output.AccountRepositoryPort;
 import com.osmarin.financial.transaction.authorization.application.ports.output.TransactionIdGeneratorPort;
+import com.osmarin.financial.transaction.authorization.application.ports.output.TransactionAuthorizationMetricsPort;
 import com.osmarin.financial.transaction.authorization.application.ports.output.TransactionRepositoryPort;
 import com.osmarin.financial.transaction.authorization.domain.enums.AccountStatus;
 import com.osmarin.financial.transaction.authorization.domain.enums.TransactionStatus;
@@ -11,6 +12,7 @@ import com.osmarin.financial.transaction.authorization.domain.exceptions.Account
 import com.osmarin.financial.transaction.authorization.domain.exceptions.CurrencyMismatchException;
 import com.osmarin.financial.transaction.authorization.domain.models.Account;
 import com.osmarin.financial.transaction.authorization.domain.models.FinancialTransaction;
+import com.osmarin.financial.transaction.authorization.domain.models.Money;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,13 +42,14 @@ class AuthorizeTransactionServiceTest {
     @Mock AccountRepositoryPort accountRepository;
     @Mock TransactionRepositoryPort transactionRepository;
     @Mock TransactionIdGeneratorPort idGenerator;
+    @Mock TransactionAuthorizationMetricsPort metrics;
 
     private AuthorizeTransactionService service;
 
     @BeforeEach
     void setUp() {
         service = new AuthorizeTransactionService(
-                accountRepository, transactionRepository, idGenerator,
+                accountRepository, transactionRepository, idGenerator, metrics,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
@@ -61,9 +64,10 @@ class AuthorizeTransactionServiceTest {
         assertThat(result.transaction().getId()).isEqualTo(TRANSACTION_ID);
         assertThat(result.transaction().getStatus()).isEqualTo(TransactionStatus.SUCCEEDED);
         assertThat(result.transaction().getTimestamp()).isEqualTo(NOW);
-        assertThat(result.account().getBalance()).isEqualByComparingTo("183.12");
+        assertThat(result.account().getBalance().amount()).isEqualByComparingTo("183.12");
         verify(accountRepository).save(account);
         verify(transactionRepository).save(result.transaction());
+        verify(metrics).record(TransactionType.CREDIT, TransactionStatus.SUCCEEDED);
     }
 
     @Test
@@ -74,7 +78,7 @@ class AuthorizeTransactionServiceTest {
         var result = service.execute(command(TransactionType.DEBIT, "40.25", "BRL"));
 
         assertThat(result.transaction().getStatus()).isEqualTo(TransactionStatus.SUCCEEDED);
-        assertThat(result.account().getBalance()).isEqualByComparingTo("59.75");
+        assertThat(result.account().getBalance().amount()).isEqualByComparingTo("59.75");
         verify(accountRepository).save(account);
     }
 
@@ -86,9 +90,10 @@ class AuthorizeTransactionServiceTest {
         var result = service.execute(command(TransactionType.DEBIT, "10.01", "BRL"));
 
         assertThat(result.transaction().getStatus()).isEqualTo(TransactionStatus.FAILED);
-        assertThat(result.account().getBalance()).isEqualByComparingTo("10.00");
+        assertThat(result.account().getBalance().amount()).isEqualByComparingTo("10.00");
         verify(accountRepository, never()).save(account);
         verify(transactionRepository).save(result.transaction());
+        verify(metrics).record(TransactionType.DEBIT, TransactionStatus.FAILED);
     }
 
     @Test
@@ -119,14 +124,16 @@ class AuthorizeTransactionServiceTest {
     }
 
     private AuthorizeTransactionCommand command(TransactionType type, String amount, String currency) {
-        return new AuthorizeTransactionCommand(ACCOUNT_ID, type, new BigDecimal(amount), currency);
+        return new AuthorizeTransactionCommand(
+                ACCOUNT_ID, type, Money.of(new BigDecimal(amount), currency)
+        );
     }
 
     private Account accountWithBalance(String balance) {
         return Account.restore(
                 ACCOUNT_ID,
                 UUID.fromString("31fb61f8-dde5-456a-9062-5b92af091bd7"),
-                new BigDecimal(balance), "BRL", AccountStatus.ENABLED,
+                Money.of(new BigDecimal(balance), "BRL"), AccountStatus.ENABLED,
                 Instant.parse("2025-01-01T00:00:00Z")
         );
     }

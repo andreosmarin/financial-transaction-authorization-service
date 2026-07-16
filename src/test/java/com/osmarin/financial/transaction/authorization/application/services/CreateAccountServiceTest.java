@@ -41,8 +41,8 @@ class CreateAccountServiceTest {
         assertThat(account.getOwnerId()).isEqualTo(command.ownerId());
         assertThat(account.getStatus()).isEqualTo(AccountStatus.ENABLED);
         assertThat(account.getOpenedAt()).isEqualTo(command.openedAt());
-        assertThat(account.getBalance()).isEqualByComparingTo("0.00");
-        assertThat(account.getCurrency()).isEqualTo("BRL");
+        assertThat(account.getBalance().amount()).isEqualByComparingTo("0.00");
+        assertThat(account.getBalance().currency()).isEqualTo("BRL");
     }
 
     @Test

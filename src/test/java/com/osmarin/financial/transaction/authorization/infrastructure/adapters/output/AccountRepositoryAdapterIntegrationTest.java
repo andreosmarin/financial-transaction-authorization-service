@@ -5,6 +5,7 @@ import com.osmarin.financial.transaction.authorization.domain.enums.TransactionS
 import com.osmarin.financial.transaction.authorization.domain.enums.TransactionType;
 import com.osmarin.financial.transaction.authorization.domain.models.Account;
 import com.osmarin.financial.transaction.authorization.domain.models.FinancialTransaction;
+import com.osmarin.financial.transaction.authorization.domain.models.Money;
 import com.osmarin.financial.transaction.authorization.infrastructure.adapters.output.mappers.AccountPersistenceMapper;
 import com.osmarin.financial.transaction.authorization.infrastructure.adapters.output.mappers.TransactionPersistenceMapper;
 import com.osmarin.financial.transaction.authorization.infrastructure.adapters.output.persistence.AccountJpaRepository;
@@ -18,12 +19,19 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace.NONE;
@@ -69,6 +77,9 @@ class AccountRepositoryAdapterIntegrationTest {
     @Autowired
     private EntityManager entityManager;
 
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     @Test
     void shouldInsertOnlyOnceAndRestorePersistedAccount() {
         UUID accountId = UUID.fromString("a74096e2-d897-4c7d-92c2-59092b79c943");
@@ -88,8 +99,8 @@ class AccountRepositoryAdapterIntegrationTest {
         assertThat(repository.findById(accountId)).hasValueSatisfying(saved -> {
             assertThat(saved.getId()).isEqualTo(account.getId());
             assertThat(saved.getOwnerId()).isEqualTo(account.getOwnerId());
-            assertThat(saved.getBalance()).isEqualByComparingTo(new BigDecimal("0.00"));
-            assertThat(saved.getCurrency()).isEqualTo("BRL");
+            assertThat(saved.getBalance().amount()).isEqualByComparingTo(new BigDecimal("0.00"));
+            assertThat(saved.getBalance().currency()).isEqualTo("BRL");
             assertThat(saved.getStatus()).isEqualTo(AccountStatus.ENABLED);
             assertThat(saved.getOpenedAt()).isEqualTo(account.getOpenedAt());
         });
@@ -108,11 +119,11 @@ class AccountRepositoryAdapterIntegrationTest {
                 .getUpdatedAt();
 
         Account lockedAccount = repository.findByIdForUpdate(accountId).orElseThrow();
-        lockedAccount.credit(new BigDecimal("97.07"), Instant.parse("2025-07-08T18:57:55Z"));
+        lockedAccount.credit(Money.of(new BigDecimal("97.07"), "BRL"));
         repository.save(lockedAccount);
         FinancialTransaction transaction = transactionRepository.save(FinancialTransaction.completed(
                 UUID.fromString("8e8ae808-b154-48b5-9f3e-553935cc4543"), accountId,
-                TransactionType.CREDIT, new BigDecimal("97.07"), "BRL",
+                TransactionType.CREDIT, Money.of(new BigDecimal("97.07"), "BRL"),
                 TransactionStatus.SUCCEEDED, Instant.parse("2025-07-08T18:57:55Z")
         ));
         jpaRepository.flush();
@@ -129,5 +140,51 @@ class AccountRepositoryAdapterIntegrationTest {
             assertThat(saved.getCreatedAt()).isNotNull();
             assertThat(saved.getUpdatedAt()).isEqualTo(saved.getCreatedAt());
         });
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void shouldSerializeConcurrentDebitsAndNeverOverdrawAccount() throws Exception {
+        UUID accountId = UUID.fromString("c0f6c952-f4bc-4a30-956d-a26a27be34b5");
+        var transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.executeWithoutResult(status -> {
+            Account account = Account.open(
+                    accountId, UUID.fromString("31fb61f8-dde5-456a-9062-5b92af091bd7"),
+                    AccountStatus.ENABLED, Instant.parse("2025-01-01T00:00:00Z")
+            );
+            account.credit(Money.of(new BigDecimal("100.00"), "BRL"));
+            repository.createIfAbsent(account);
+        });
+
+        var ready = new CountDownLatch(2);
+        var start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var debit = (java.util.concurrent.Callable<Boolean>) () -> {
+                ready.countDown();
+                start.await(5, TimeUnit.SECONDS);
+                return transactionTemplate.execute(status -> {
+                    Account account = repository.findByIdForUpdate(accountId).orElseThrow();
+                    boolean authorized = account.debit(Money.of(new BigDecimal("80.00"), "BRL"));
+                    if (authorized) {
+                        repository.save(account);
+                    }
+                    return authorized;
+                });
+            };
+
+            var first = executor.submit(debit);
+            var second = executor.submit(debit);
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertThat(java.util.List.of(
+                    first.get(10, TimeUnit.SECONDS),
+                    second.get(10, TimeUnit.SECONDS)
+            )).containsExactlyInAnyOrder(true, false);
+        }
+
+        assertThat(jpaRepository.findById(accountId)).hasValueSatisfying(account ->
+                assertThat(account.getBalance()).isEqualByComparingTo("20.00")
+        );
     }
 }

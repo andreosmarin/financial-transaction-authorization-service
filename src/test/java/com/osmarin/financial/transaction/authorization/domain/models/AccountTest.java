@@ -23,8 +23,7 @@ class AccountTest {
 
         assertThat(account.getId()).isEqualTo(ACCOUNT_ID);
         assertThat(account.getOwnerId()).isEqualTo(OWNER_ID);
-        assertThat(account.getBalance()).isEqualByComparingTo("0.00");
-        assertThat(account.getCurrency()).isEqualTo("BRL");
+        assertThat(account.getBalance()).isEqualTo(Money.zero("BRL"));
         assertThat(account.getStatus()).isEqualTo(AccountStatus.ENABLED);
         assertThat(account.getOpenedAt()).isEqualTo(OPENED_AT);
     }
@@ -33,46 +32,66 @@ class AccountTest {
     void shouldCreditAndDebitValidAmounts() {
         Account account = enabledAccountWithBalance("100.00");
 
-        account.credit(new BigDecimal("25.50"), OPENED_AT.plusSeconds(1));
-        boolean debited = account.debit(new BigDecimal("40.25"), OPENED_AT.plusSeconds(2));
+        account.credit(money("25.50"));
+        boolean debited = account.debit(money("40.25"));
 
         assertThat(debited).isTrue();
-        assertThat(account.getBalance()).isEqualByComparingTo("85.25");
+        assertThat(account.getBalance()).isEqualTo(money("85.25"));
     }
 
     @Test
     void shouldRefuseDebitWhenBalanceIsInsufficientWithoutChangingIt() {
         Account account = enabledAccountWithBalance("10.00");
 
-        boolean debited = account.debit(new BigDecimal("10.01"), OPENED_AT);
+        boolean debited = account.debit(money("10.01"));
 
         assertThat(debited).isFalse();
-        assertThat(account.getBalance()).isEqualByComparingTo("10.00");
+        assertThat(account.getBalance()).isEqualTo(money("10.00"));
+    }
+
+    @Test
+    void shouldAllowDebitForExactBalance() {
+        Account account = enabledAccountWithBalance("10.00");
+
+        boolean debited = account.debit(money("10.00"));
+
+        assertThat(debited).isTrue();
+        assertThat(account.getBalance()).isEqualTo(Money.zero("BRL"));
+    }
+
+    @Test
+    void shouldRejectTransactionsForDisabledAccount() {
+        Account account = Account.restore(
+                ACCOUNT_ID, OWNER_ID, money("10.00"),
+                AccountStatus.DISABLED, OPENED_AT
+        );
+
+        assertThatThrownBy(() -> account.credit(money("1.00")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Account is not enabled");
+        assertThat(account.getBalance()).isEqualTo(money("10.00"));
     }
 
     @Test
     void shouldRejectNonPositiveOrOverPreciseAmounts() {
         Account account = enabledAccountWithBalance("10.00");
 
-        assertThatThrownBy(() -> account.credit(BigDecimal.ZERO, OPENED_AT))
+        assertThatThrownBy(() -> account.credit(Money.zero("BRL")))
                 .isInstanceOf(InvalidAmountException.class)
                 .hasMessage("Amount must be greater than zero");
-        assertThatThrownBy(() -> account.debit(new BigDecimal("1.001"), OPENED_AT))
+        assertThatThrownBy(() -> Money.of(new BigDecimal("1.001"), "BRL"))
                 .isInstanceOf(InvalidAmountException.class)
                 .hasMessage("Amount must have at most two decimal places");
     }
 
     @Test
-    void shouldNormalizeCurrencyWhenRestoringAccount() {
-        Account withDefaultCurrency = Account.restore(
-                ACCOUNT_ID, OWNER_ID, BigDecimal.ZERO, " ", AccountStatus.ENABLED, OPENED_AT
-        );
-        Account withLowercaseCurrency = Account.restore(
-                ACCOUNT_ID, OWNER_ID, BigDecimal.ZERO, "usd", AccountStatus.ENABLED, OPENED_AT
-        );
+    void shouldRejectOperationWithCurrencyDifferentFromAccount() {
+        Account account = enabledAccountWithBalance("10.00");
 
-        assertThat(withDefaultCurrency.getCurrency()).isEqualTo("BRL");
-        assertThat(withLowercaseCurrency.getCurrency()).isEqualTo("USD");
+        assertThatThrownBy(() -> account.credit(Money.of(new BigDecimal("1.00"), "USD")))
+                .isInstanceOf(com.osmarin.financial.transaction.authorization.domain.exceptions.CurrencyMismatchException.class)
+                .hasMessage("Transaction currency USD does not match account currency BRL");
+        assertThat(account.getBalance()).isEqualTo(money("10.00"));
     }
 
     @Test
@@ -80,19 +99,22 @@ class AccountTest {
         assertThatThrownBy(() -> enabledAccountWithBalance("-0.01"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Balance must not be negative");
-        assertThatThrownBy(() -> enabledAccountWithBalance("1.001"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Balance must have at most two decimal places");
+        assertThatThrownBy(() -> Money.of(new BigDecimal("1.001"), "BRL"))
+                .isInstanceOf(InvalidAmountException.class)
+                .hasMessage("Amount must have at most two decimal places");
     }
 
     private Account enabledAccountWithBalance(String balance) {
         return Account.restore(
                 ACCOUNT_ID,
                 OWNER_ID,
-                new BigDecimal(balance),
-                "BRL",
+                money(balance),
                 AccountStatus.ENABLED,
                 OPENED_AT
         );
+    }
+
+    private Money money(String amount) {
+        return Money.of(new BigDecimal(amount), "BRL");
     }
 }

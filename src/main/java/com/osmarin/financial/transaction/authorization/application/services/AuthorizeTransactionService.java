@@ -4,12 +4,12 @@ import com.osmarin.financial.transaction.authorization.application.commands.Auth
 import com.osmarin.financial.transaction.authorization.application.ports.input.AuthorizeTransactionUseCase;
 import com.osmarin.financial.transaction.authorization.application.ports.output.AccountRepositoryPort;
 import com.osmarin.financial.transaction.authorization.application.ports.output.TransactionIdGeneratorPort;
+import com.osmarin.financial.transaction.authorization.application.ports.output.TransactionAuthorizationMetricsPort;
 import com.osmarin.financial.transaction.authorization.application.ports.output.TransactionRepositoryPort;
 import com.osmarin.financial.transaction.authorization.application.results.TransactionAuthorizationResult;
 import com.osmarin.financial.transaction.authorization.domain.enums.TransactionStatus;
 import com.osmarin.financial.transaction.authorization.domain.enums.TransactionType;
 import com.osmarin.financial.transaction.authorization.domain.exceptions.AccountNotFoundException;
-import com.osmarin.financial.transaction.authorization.domain.exceptions.CurrencyMismatchException;
 import com.osmarin.financial.transaction.authorization.domain.models.Account;
 import com.osmarin.financial.transaction.authorization.domain.models.FinancialTransaction;
 import jakarta.transaction.Transactional;
@@ -18,7 +18,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
-import java.util.Locale;
 import java.util.Objects;
 
 @Service
@@ -29,15 +28,18 @@ public class AuthorizeTransactionService implements AuthorizeTransactionUseCase 
     private final AccountRepositoryPort accountRepository;
     private final TransactionRepositoryPort transactionRepository;
     private final TransactionIdGeneratorPort idGenerator;
+    private final TransactionAuthorizationMetricsPort metrics;
     private final Clock clock;
 
     public AuthorizeTransactionService(AccountRepositoryPort accountRepository,
                                        TransactionRepositoryPort transactionRepository,
                                        TransactionIdGeneratorPort idGenerator,
+                                       TransactionAuthorizationMetricsPort metrics,
                                        Clock clock) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.idGenerator = idGenerator;
+        this.metrics = metrics;
         this.clock = clock;
     }
 
@@ -54,43 +56,33 @@ public class AuthorizeTransactionService implements AuthorizeTransactionUseCase 
         Account account = accountRepository.findByIdForUpdate(command.accountId())
                 .orElseThrow(() -> new AccountNotFoundException(command.accountId()));
 
-        String currency = normalizeCurrency(command.currency());
-        if (!account.getCurrency().equals(currency)) {
-            throw new CurrencyMismatchException(currency, account.getCurrency());
-        }
-
         var timestamp = clock.instant();
-        TransactionStatus status = authorize(account, command, timestamp);
+        TransactionStatus status = authorize(account, command);
         if (status == TransactionStatus.SUCCEEDED) {
             accountRepository.save(account);
         }
 
         FinancialTransaction transaction = FinancialTransaction.completed(
                 idGenerator.generate(), account.getId(), command.type(), command.amount(),
-                currency, status, timestamp
+                status, timestamp
         );
         FinancialTransaction savedTransaction = transactionRepository.save(transaction);
 
+        metrics.record(savedTransaction.getType(), savedTransaction.getStatus());
         logAuthorizationResult(savedTransaction);
 
         return new TransactionAuthorizationResult(savedTransaction, account);
     }
 
-    private TransactionStatus authorize(Account account, AuthorizeTransactionCommand command,
-                                        java.time.Instant timestamp) {
+    private TransactionStatus authorize(Account account, AuthorizeTransactionCommand command) {
         Objects.requireNonNull(command.type(), "type must not be null");
         if (command.type() == TransactionType.CREDIT) {
-            account.credit(command.amount(), timestamp);
+            account.credit(command.amount());
             return TransactionStatus.SUCCEEDED;
         }
-        return account.debit(command.amount(), timestamp)
+        return account.debit(command.amount())
                 ? TransactionStatus.SUCCEEDED
                 : TransactionStatus.FAILED;
-    }
-
-    private String normalizeCurrency(String currency) {
-        Objects.requireNonNull(currency, "currency must not be null");
-        return currency.strip().toUpperCase(Locale.ROOT);
     }
 
     private void logAuthorizationResult(FinancialTransaction transaction) {
